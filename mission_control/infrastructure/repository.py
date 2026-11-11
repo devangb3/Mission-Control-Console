@@ -1,5 +1,6 @@
 """SQLite storage. Each report field is a column, and a new process opening the same file still sees the reports."""
 
+import logging
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -9,6 +10,9 @@ from pydantic import ValidationError
 
 from mission_control.domain import ReportRecord, ReportStatus
 from mission_control.domain.errors import AlreadyApproved, ReportNotFound
+from mission_control.log import one_line
+
+logger = logging.getLogger(__name__)
 
 
 class StorageSchemaError(Exception):
@@ -47,9 +51,14 @@ class Repository:
         connection = self._connect()
         try:
             with _transaction(connection, write=True):
-                self._ensure_schema(connection)
+                schema_event = self._ensure_schema(connection)
         finally:
             connection.close()
+        logger.info("Opened the report database at %s.", one_line(str(self._path)))
+        if schema_event is None:
+            logger.debug("Report database schema is current.")
+        else:
+            logger.info("%s", schema_event)
 
     def add(self, report: ReportRecord) -> None:
         assert report.status is ReportStatus.PENDING
@@ -123,28 +132,30 @@ class Repository:
         connection.execute("PRAGMA foreign_keys = ON")
         return connection
 
-    def _ensure_schema(self, connection: sqlite3.Connection) -> None:
+    def _ensure_schema(self, connection: sqlite3.Connection) -> str | None:
         columns = _column_names(connection, "reports")
         if not columns:
             self._create_tables(connection)
-            return
+            return "Created the report tables."
         if "body" in columns:
             if "engineer_name" in columns:
-                raise StorageSchemaError("reports has both a body column and report columns.")
-            self._replace_blob_table(connection)
-            return
+                raise _schema_error("reports has both a body column and report columns.")
+            moved = self._replace_blob_table(connection)
+            return f"Moved {moved} reports out of the blob table into columns."
         missing = [name for name in _REPORT_COLUMNS if name not in columns]
         if missing:
-            raise StorageSchemaError(f"reports is missing columns: {', '.join(missing)}")
+            raise _schema_error(f"reports is missing columns: {', '.join(missing)}")
         self._create_child_tables(connection)
+        return None
 
-    def _replace_blob_table(self, connection: sqlite3.Connection) -> None:
+    def _replace_blob_table(self, connection: sqlite3.Connection) -> int:
         rows = connection.execute("SELECT id, status, created_at, body FROM reports").fetchall()
         saved = [_record_from_blob(row) for row in rows]
         connection.execute("DROP TABLE reports")
         self._create_tables(connection)
         for report in saved:
             self._insert(connection, report)
+        return len(saved)
 
     def _create_tables(self, connection: sqlite3.Connection) -> None:
         connection.execute(
@@ -323,17 +334,22 @@ def _column_names(connection: sqlite3.Connection, table: str) -> set[str]:
     return {_text(row["name"]) for row in rows}
 
 
+def _schema_error(message: str) -> StorageSchemaError:
+    logger.error("%s", message)
+    return StorageSchemaError(message)
+
+
 def _record_from_blob(row: sqlite3.Row) -> ReportRecord:
     report_id = _text(row["id"])
     body = row["body"]
     if not isinstance(body, str):
-        raise StorageSchemaError(f"Saved report {report_id} has a body that is not text.")
+        raise _schema_error(f"Saved report {report_id} has a body that is not text.")
     try:
         report = ReportRecord.model_validate_json(body)
     except ValidationError as exc:
-        raise StorageSchemaError(f"Saved report {report_id} is not a report record.") from exc
+        raise _schema_error(f"Saved report {report_id} is not a report record.") from exc
     if report.id != report_id or report.status.value != row["status"] or report.created_at != row["created_at"]:
-        raise StorageSchemaError(
+        raise _schema_error(
             f"Saved report {report_id} does not match its id, status, and created_at columns."
         )
     return report

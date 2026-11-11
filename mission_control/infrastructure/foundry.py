@@ -1,7 +1,9 @@
 """OpenAI Responses API client for Microsoft Foundry."""
 
 import asyncio
+import logging
 import os
+import time
 from urllib.parse import urlsplit
 
 import httpx
@@ -11,6 +13,9 @@ from openai.types.responses.response_create_params import ResponseCreateParamsNo
 
 from mission_control.domain.errors import FoundryConfigError, ModelCallError
 from mission_control.application.model_client import ModelText
+from mission_control.log import elapsed_ms, one_line
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_base_url(url: str) -> str:
@@ -61,12 +66,21 @@ class FoundryModelClient:
             raise FoundryConfigError("Set FOUNDRY_MODEL to the deployment name.")
         self._model = model.strip()
         self._json_mode = json_mode
+        normalized = normalize_base_url(base_url)
         self._client = OpenAI(
             api_key=api_key,
-            base_url=normalize_base_url(base_url),
+            base_url=normalized,
             timeout=60.0,
             max_retries=0,
             http_client=http_client,
+        )
+        host = urlsplit(normalized).hostname
+        assert host is not None
+        logger.info(
+            "Foundry client ready for deployment %s at %s, json mode %s.",
+            self._model,
+            host,
+            "on" if self._json_mode else "off",
         )
 
     @classmethod
@@ -88,8 +102,27 @@ class FoundryModelClient:
         )
 
     async def complete(self, *, step: str, system: str, user: str) -> ModelText:
-        del step
-        return await asyncio.to_thread(self._complete_sync, system, user)
+        safe_step = one_line(step, limit=40)
+        logger.debug(
+            "Foundry step %s is sending %d system characters and %d user characters.",
+            safe_step,
+            len(system),
+            len(user),
+        )
+        started = time.perf_counter()
+        try:
+            result = await asyncio.to_thread(self._complete_sync, system, user)
+        except ModelCallError as exc:
+            _log_model_failure(safe_step, started, exc)
+            raise
+        logger.info(
+            "Foundry step %s completed in %d ms, %d tokens in, %d tokens out.",
+            safe_step,
+            elapsed_ms(started),
+            result.tokens_in,
+            result.tokens_out,
+        )
+        return result
 
     def _complete_sync(self, system: str, user: str) -> ModelText:
         try:
@@ -135,6 +168,32 @@ class FoundryModelClient:
         if self._json_mode:
             params["text"] = {"format": {"type": "json_object"}}
         return self._client.responses.create(**params)
+
+
+def _log_model_failure(step: str, started: float, exc: ModelCallError) -> None:
+    elapsed = elapsed_ms(started)
+    cause = exc.__cause__
+    if isinstance(cause, APIStatusError):
+        logger.error(
+            "Foundry step %s failed after %d ms with HTTP %s: %s",
+            step,
+            elapsed,
+            cause.status_code,
+            exc.message,
+        )
+        return
+    if isinstance(cause, APITimeoutError):
+        logger.error("Foundry step %s timed out after %d ms: %s", step, elapsed, exc.message)
+        return
+    if isinstance(cause, APIConnectionError):
+        logger.error(
+            "Foundry step %s could not connect after %d ms: %s",
+            step,
+            elapsed,
+            exc.message,
+        )
+        return
+    logger.error("Foundry step %s failed after %d ms: %s", step, elapsed, exc.message)
 
 
 def _json_mode_from_env() -> bool:
