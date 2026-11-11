@@ -1,9 +1,9 @@
 """The draft loop stops at three rounds, and only a person can approve."""
 
 from mission_control.domain import ReportStatus, Severity, Verdict
-from mission_control.intake import parse_report_input
-from mission_control.parsing import parse_review
-from mission_control.prompts import draft_prompt
+from mission_control.application.intake import parse_report_input
+from mission_control.application.parsing import parse_review
+from mission_control.application.prompts import draft_prompt
 from tests.scripted import as_json, scripted
 from tests.support import run_report, reading
 

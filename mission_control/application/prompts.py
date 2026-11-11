@@ -1,7 +1,7 @@
 """Prompts for the Foundry deployment. The note is always untrusted data."""
 
 from mission_control.domain import ReportInput, Severity, Verdict
-from mission_control.parsing import single_line
+from mission_control.application.parsing import single_line
 
 SORT_STEP = "sort"
 HIDDEN_STEP = "hidden_instructions"

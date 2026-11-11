@@ -5,7 +5,7 @@ import inspect
 import pytest
 
 from mission_control.domain import Verdict
-from mission_control.limits import evaluate_limits
+from mission_control.domain.limits import evaluate_limits
 
 @pytest.mark.parametrize(
     ("wind", "temp", "fuel", "verdict", "count"),

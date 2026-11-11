@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 
 from mission_control.domain import Severity, Subsystem
-from mission_control.errors import ModelOutputError
+from mission_control.domain.errors import ModelOutputError
 
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
 _SUBSYSTEMS = {item.value for item in Subsystem}

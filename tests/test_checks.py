@@ -3,9 +3,9 @@
 import asyncio
 
 from mission_control.domain import ReportStatus, Verdict
-from mission_control.limits import evaluate_limits
-from mission_control.model_client import ModelText
-from mission_control.prompts import HIDDEN_STEP, MISSING_STEP, PANIC_STEP
+from mission_control.domain.limits import evaluate_limits
+from mission_control.application.model_client import ModelText
+from mission_control.application.prompts import HIDDEN_STEP, MISSING_STEP, PANIC_STEP
 from tests.scripted import ScriptedModelClient, ScriptedReply, as_json, scripted
 from tests.support import HIDDEN_INSTRUCTION_NOTE, run_report, reading
 

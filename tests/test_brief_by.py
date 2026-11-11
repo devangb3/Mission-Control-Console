@@ -2,7 +2,7 @@
 
 import pytest
 
-from mission_control.brief_by import brief_by_minutes
+from mission_control.domain.brief_by import brief_by_minutes
 from mission_control.domain import Severity
 
 

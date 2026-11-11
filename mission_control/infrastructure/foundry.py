@@ -8,8 +8,8 @@ from urllib.parse import urlsplit
 import httpx
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 
-from mission_control.errors import FoundryConfigError, ModelCallError
-from mission_control.model_client import ModelText
+from mission_control.domain.errors import FoundryConfigError, ModelCallError
+from mission_control.application.model_client import ModelText
 
 
 def normalize_base_url(url: str) -> str:

@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from mission_control.cost import Pricing, report_cost
+from mission_control.domain.cost import Pricing, report_cost
 from mission_control.domain import TraceStep
 from tests.scripted import scripted
 from tests.support import TEST_PRICING, run_report, reading

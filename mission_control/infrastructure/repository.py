@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 
 from mission_control.domain import ReportRecord, ReportStatus
-from mission_control.errors import AlreadyApproved, ReportNotFound
+from mission_control.domain.errors import AlreadyApproved, ReportNotFound
 
 
 class Repository:

@@ -3,7 +3,7 @@
 import math
 
 from mission_control.domain import ReportInput
-from mission_control.errors import InvalidReport
+from mission_control.domain.errors import InvalidReport
 
 _FIELDS = (
     "engineer_name",

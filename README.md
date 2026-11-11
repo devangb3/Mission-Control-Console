@@ -34,3 +34,44 @@ Set `FOUNDRY_INPUT_USD_PER_MILLION` and `FOUNDRY_OUTPUT_USD_PER_MILLION` to the 
 ## Tool choices
 
 See [docs/tool-choices.md](docs/tool-choices.md).
+
+## Backend responsibilities
+
+The backend is organized by responsibility:
+
+```text
+mission_control/
+├── main.py                  # Process entry point
+├── factory.py               # Composition root and dependency wiring
+├── api/
+│   ├── routes.py            # HTTP decoding and response contracts
+│   └── http_errors.py       # Application error to HTTP mapping
+├── application/
+│   ├── service.py           # Report creation, retrieval, and approval
+│   ├── ports.py             # Storage and report-builder protocols
+│   ├── pipeline.py          # Model workflow orchestration
+│   ├── model_client.py      # Model interface and response types
+│   ├── intake.py            # Report input validation
+│   ├── prompts.py           # Model prompt construction
+│   └── parsing.py           # Model output parsing
+├── domain/
+│   ├── models.py            # Report types and states
+│   ├── errors.py            # Application exceptions
+│   ├── limits.py            # Launch limits
+│   ├── brief_by.py          # Briefing deadline rules
+│   └── cost.py              # Token pricing and cost calculations
+└── infrastructure/
+    ├── config.py            # Environment configuration
+    ├── foundry.py           # Foundry model adapter
+    └── repository.py        # SQLite persistence
+```
+
+`factory.create_app` wires the concrete dependencies. HTTP routes delegate to
+`ReportService`, which depends on the `ReportStore` and `ReportBuilder` protocols.
+Application and domain modules do not import HTTP or concrete infrastructure.
+`Repository` retains atomic approval transactions. `ReportPipeline` receives its
+model and pricing dependencies and keeps execution state local to each call.
+The functional `build_report` entry point lives in `application.pipeline`.
+
+Python imports now use these package paths; the process entry point and
+`factory.create_app` remain unchanged. HTTP endpoints and payloads are unchanged.

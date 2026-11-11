@@ -3,7 +3,7 @@
 import json
 from dataclasses import dataclass
 
-from mission_control.model_client import ModelText
+from mission_control.application.model_client import ModelText
 
 
 @dataclass(frozen=True)

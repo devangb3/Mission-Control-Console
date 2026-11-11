@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from mission_control.factory import create_app
-from mission_control.limits import evaluate_limits
+from mission_control.domain.limits import evaluate_limits
 from tests.scripted import as_json, scripted
 from tests.support import HIDDEN_INSTRUCTION_NOTE, TEST_PRICING, reading
 

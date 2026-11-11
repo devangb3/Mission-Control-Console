@@ -5,8 +5,8 @@ import json
 import httpx
 import pytest
 
-from mission_control.errors import FoundryConfigError, ModelCallError
-from mission_control.foundry import FoundryModelClient, normalize_base_url
+from mission_control.domain.errors import FoundryConfigError, ModelCallError
+from mission_control.infrastructure.foundry import FoundryModelClient, normalize_base_url
 
 
 def test_base_url_points_at_the_openai_v1_route() -> None:

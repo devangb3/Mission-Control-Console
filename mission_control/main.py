@@ -1,6 +1,6 @@
 """Process entry point. ``make start`` loads this module."""
 
-from mission_control.errors import FoundryConfigError
+from mission_control.domain.errors import FoundryConfigError
 from mission_control.factory import create_app
 
 try:

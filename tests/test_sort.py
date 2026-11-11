@@ -1,7 +1,7 @@
 """A sort reply is checked against a closed schema, and a bad value falls back."""
 
 from mission_control.domain import Severity, Subsystem, Verdict
-from mission_control.parsing import parse_sort
+from mission_control.application.parsing import parse_sort
 from tests.scripted import ScriptedReply, as_json, scripted
 from tests.support import run_report, reading
 
