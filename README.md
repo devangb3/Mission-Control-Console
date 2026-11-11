@@ -20,15 +20,7 @@ make test
 
 `make start` loads `.env` from the repo root. Copy `.env.example` to `.env` and set the Foundry resource URL, API key, and deployment name. The client calls `{resource}/openai/v1/chat/completions` and sends the key as a bearer token. That is the current Foundry route. The Azure AI Inference SDK retired on 26 August 2026.
 
-Set `FOUNDRY_INPUT_USD_PER_MILLION` and `FOUNDRY_OUTPUT_USD_PER_MILLION` to the rates for your deployment. The console multiplies each step's tokens by those rates. The defaults are a stand-in for a small chat deployment, not a bill from Foundry.
-
-For a local console with no key and no network:
-
-```
-MODEL_BACKEND=fake make start
-```
-
-Then open http://127.0.0.1:47821.
+Set `FOUNDRY_INPUT_USD_PER_MILLION` and `FOUNDRY_OUTPUT_USD_PER_MILLION` to the rates for your deployment. The console multiplies each step's tokens by those rates. The defaults are a stand-in for a small chat deployment, not a bill from Foundry. After `make start`, open http://127.0.0.1:47821.
 
 ## What the pipeline does
 

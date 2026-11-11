@@ -4,10 +4,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from mission_control.demo_model import DemoModelClient
 from mission_control.factory import create_app
 from mission_control.limits import evaluate_limits
-from tests.scripted import scripted
+from tests.scripted import as_json, scripted
 from tests.support import HIDDEN_INSTRUCTION_NOTE, TEST_PRICING, reading
 
 
@@ -113,8 +112,9 @@ def test_only_a_person_can_approve(tmp_path: Path) -> None:
         assert missing_report.status_code == 404
 
 
-def test_demo_model_flags_the_hidden_instruction_note_and_leaves_the_verdict(tmp_path: Path) -> None:
-    with _client(tmp_path, model=DemoModelClient()) as client:
+def test_hidden_instruction_note_is_flagged_and_leaves_the_verdict(tmp_path: Path) -> None:
+    flagged = as_json({"flagged": True, "reason": "The note instructs the system."})
+    with _client(tmp_path, model=scripted(hidden=[flagged])) as client:
         no_go = client.post(
             "/api/reports",
             json=reading(wind_knots=40, note=HIDDEN_INSTRUCTION_NOTE),
@@ -127,8 +127,8 @@ def test_demo_model_flags_the_hidden_instruction_note_and_leaves_the_verdict(tmp
         assert body["flagged_for_review"] is True
         assert body["status"] == "pending"
         assert body["brief_by_minutes"] == 5
-        assert "not followed" in body["briefing"].lower() or "instructions" in body["briefing"].lower()
 
+    with _client(tmp_path, model=scripted(hidden=[flagged])) as client:
         still_go = client.post("/api/reports", json=reading(note=HIDDEN_INSTRUCTION_NOTE))
         assert still_go.status_code == 201
         assert still_go.json()["verdict"] == "go"

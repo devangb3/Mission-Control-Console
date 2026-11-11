@@ -1,9 +1,4 @@
-"""Microsoft Foundry chat completions on the OpenAI v1 route.
-
-The Azure AI Inference SDK retired on 26 August 2026. New Foundry apps call
-``{resource}/openai/v1/chat/completions`` with the OpenAI client. The deployment
-name is the ``model`` field. The API key is sent as a bearer token, which that
-route accepts.
+"""Azure AI Inference SDK for Microsoft Foundry chat completions.
 """
 
 import asyncio

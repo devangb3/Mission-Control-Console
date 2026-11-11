@@ -11,9 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from mission_control.cost import Pricing
-from mission_control.demo_model import DemoModelClient
 from mission_control.domain import ReportRecord
-from mission_control.env import load_env_file
+from dotenv import load_dotenv
 from mission_control.errors import (
     AlreadyApproved,
     AppError,
@@ -41,7 +40,7 @@ def create_app(
 ) -> FastAPI:
     client: ModelClient
     if model is None:
-        load_env_file(Path.cwd() / ".env")
+        load_dotenv(Path.cwd() / ".env")
         client = build_model_client()
         resolved_pricing = pricing if pricing is not None else pricing_from_env()
     else:
@@ -101,12 +100,7 @@ def create_app(
 
 
 def build_model_client() -> ModelClient:
-    backend = os.environ.get("MODEL_BACKEND", "foundry").strip().lower()
-    if backend == "fake":
-        return DemoModelClient()
-    if backend == "foundry":
-        return FoundryModelClient.from_env()
-    raise FoundryConfigError("MODEL_BACKEND must be foundry or fake.")
+    return FoundryModelClient.from_env()
 
 
 def pricing_from_env() -> Pricing:
