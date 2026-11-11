@@ -2,3 +2,9 @@ misc/
 .DS_Store
 .env
 .cursor/
+.venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+data/
+.mypy_cache/
