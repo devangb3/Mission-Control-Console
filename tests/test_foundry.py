@@ -40,9 +40,8 @@ def test_from_env_requires_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.parametrize("json_mode", [True, False])
-@pytest.mark.parametrize("temperature", [0, None])
 def test_response_sends_the_deployment_and_reads_tokens(
-    json_mode: bool, temperature: float | None,
+    json_mode: bool,
 ) -> None:
     seen: list[httpx.Request] = []
 
@@ -77,7 +76,6 @@ def test_response_sends_the_deployment_and_reads_tokens(
         api_key="test-key",
         base_url="https://meridian.openai.azure.com",
         model="mission-briefing",
-        temperature=temperature,
         json_mode=json_mode,
         http_client=httpx.Client(transport=httpx.MockTransport(handler)),
     )
@@ -95,18 +93,16 @@ def test_response_sends_the_deployment_and_reads_tokens(
     assert request.headers["authorization"] == "Bearer test-key"
     body = json.loads(request.content.decode())
     assert body["model"] == "mission-briefing"
-    assert body["instructions"] == "Return JSON."
-    assert body["input"] == "Station: LC-39A"
+    assert body["input"] == [
+        {"role": "system", "content": "Return JSON."},
+        {"role": "user", "content": "Station: LC-39A"},
+    ]
     assert "messages" not in body
     assert "response_format" not in body
     if json_mode:
         assert body["text"] == {"format": {"type": "json_object"}}
     else:
         assert "text" not in body
-    if temperature is not None:
-        assert body["temperature"] == temperature
-    else:
-        assert "temperature" not in body
 
 
 def test_a_refused_key_is_a_clear_error() -> None:
@@ -117,7 +113,6 @@ def test_a_refused_key_is_a_clear_error() -> None:
         api_key="test-key",
         base_url="https://meridian.openai.azure.com",
         model="mission-briefing",
-        temperature=None,
         json_mode=False,
         http_client=httpx.Client(transport=httpx.MockTransport(handler)),
     )
@@ -159,7 +154,6 @@ def test_unusable_responses_raise_clear_errors(overrides: dict, error: str) -> N
         api_key="test-key",
         base_url="https://meridian.services.ai.azure.com/openai/v1",
         model="mission-briefing",
-        temperature=None,
         json_mode=False,
         http_client=httpx.Client(transport=httpx.MockTransport(
             lambda request: httpx.Response(200, json=payload)

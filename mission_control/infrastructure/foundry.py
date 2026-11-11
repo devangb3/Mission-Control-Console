@@ -52,7 +52,6 @@ class FoundryModelClient:
         api_key: str,
         base_url: str,
         model: str,
-        temperature: float | None,
         json_mode: bool,
         http_client: httpx.Client | None = None,
     ) -> None:
@@ -61,7 +60,6 @@ class FoundryModelClient:
         if not model.strip():
             raise FoundryConfigError("Set FOUNDRY_MODEL to the deployment name.")
         self._model = model.strip()
-        self._temperature = temperature
         self._json_mode = json_mode
         self._client = OpenAI(
             api_key=api_key,
@@ -86,7 +84,6 @@ class FoundryModelClient:
             api_key=api_key,
             base_url=base_url,
             model=model,
-            temperature=_temperature_from_env(),
             json_mode=_json_mode_from_env(),
         )
 
@@ -130,27 +127,14 @@ class FoundryModelClient:
     def _create(self, system: str, user: str) -> Response:
         params: ResponseCreateParamsNonStreaming = {
             "model": self._model,
-            "instructions": system,
-            "input": user,
+            "input": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
         }
         if self._json_mode:
             params["text"] = {"format": {"type": "json_object"}}
-        if self._temperature is not None:
-            params["temperature"] = self._temperature
         return self._client.responses.create(**params)
-
-
-def _temperature_from_env() -> float | None:
-    raw = os.environ.get("FOUNDRY_TEMPERATURE", "0").strip()
-    if raw.lower() == "omit":
-        return None
-    try:
-        value = float(raw)
-    except ValueError as exc:
-        raise FoundryConfigError("FOUNDRY_TEMPERATURE must be a number or omit.") from exc
-    if not 0 <= value <= 2:
-        raise FoundryConfigError("FOUNDRY_TEMPERATURE must be between 0 and 2, or omit.")
-    return value
 
 
 def _json_mode_from_env() -> bool:
