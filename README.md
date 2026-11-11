@@ -30,9 +30,13 @@ Run the tests:
 make test
 ```
 
+GitHub Actions runs that command on Python 3.11, 3.12, and 3.13 for each pull request and each push to `main`. The workflow does not use a Foundry key.
+
 `make start` loads `.env` from the repo root. Copy `.env.example` to `.env` and set the Foundry resource URL, API key, and deployment name. The client calls `{resource}/openai/v1/responses` and sends the key as a bearer token. That is the current Foundry route. The Azure AI Inference SDK retired on 26 August 2026.
 
 Set `FOUNDRY_INPUT_USD_PER_MILLION` and `FOUNDRY_OUTPUT_USD_PER_MILLION` to the rates for your deployment. The console multiplies each step's tokens by those rates. The defaults are a stand-in for a small chat deployment, not a bill from Foundry. After `make start`, open http://127.0.0.1:47821.
+
+Logs go to stderr on the `mission_control` logger. Set `LOG_LEVEL` to `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`. The default is `INFO`. Each line is UTC. While a report is being filed or approved, its id is on those lines. The API key, the filed note, and the model prompts are not logged. Uvicorn writes its own access line as well; the application also logs method, path, status, and duration for `/api` requests.
 
 ## What the pipeline does
 
@@ -55,7 +59,9 @@ The backend is organized by responsibility:
 mission_control/
 ├── main.py                  # Process entry point
 ├── factory.py               # Composition root and dependency wiring
+├── log.py                   # Process logging
 ├── api/
+│   ├── access_log.py        # API request duration and status
 │   ├── routes.py            # HTTP decoding and response contracts
 │   └── http_errors.py       # Application error to HTTP mapping
 ├── application/

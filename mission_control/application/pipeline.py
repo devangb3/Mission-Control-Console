@@ -1,10 +1,12 @@
 """Run one report from filing to a briefing that is waiting for a person."""
 
 import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 
 from mission_control.domain.brief_by import brief_by_minutes
+from mission_control.domain.errors import ModelOutputError
 from mission_control.domain.cost import Pricing, format_cost, report_cost
 from mission_control.domain import (
     DraftRound,
@@ -14,9 +16,19 @@ from mission_control.domain import (
     TraceStep,
     Verdict,
 )
-from mission_control.domain.limits import evaluate_limits
+from mission_control.domain.limits import evaluate_limits, format_reading
 from mission_control.application.model_client import ModelClient, ModelText
-from mission_control.application.parsing import parse_check, parse_draft, parse_review, parse_sort
+from mission_control.application.parsing import (
+    CheckDecision,
+    ReviewDecision,
+    parse_check,
+    parse_draft,
+    parse_review,
+    parse_sort,
+)
+from mission_control.log import one_line, report_context
+
+logger = logging.getLogger(__name__)
 from mission_control.application.prompts import (
     DRAFT_STEP,
     HIDDEN_STEP,
@@ -46,11 +58,40 @@ class ReportPipeline:
         The verdict comes only from ``evaluate_limits``. A note that tries to give
         instructions is flagged and the briefing stays pending for a person.
         """
+        report_id = str(uuid.uuid4())
+        with report_context(report_id):
+            try:
+                return await self._build(report_id, report_input)
+            except ModelOutputError as exc:
+                logger.error("Report filing failed: %s", exc.message)
+                raise
+
+    async def _build(self, report_id: str, report_input: ReportInput) -> ReportRecord:
+        logger.info(
+            "Filing a report from %s at %s: wind %s knots, temperature %s C, fuel %s percent.",
+            one_line(report_input.engineer_name),
+            one_line(report_input.station),
+            format_reading(report_input.wind_knots),
+            format_reading(report_input.temp_c),
+            format_reading(report_input.fuel_pct),
+        )
         trace: list[TraceStep] = []
 
         sort_system, sort_user = sort_prompt(report_input)
         sort_text = await self._model.complete(step=SORT_STEP, system=sort_system, user=sort_user)
         sort = parse_sort(sort_text.text)
+        if sort.used_fallback:
+            logger.warning(
+                "Sort reply was invalid. Subsystem %s, severity %s.",
+                sort.subsystem.value,
+                sort.severity.value,
+            )
+        else:
+            logger.info(
+                "Sorted subsystem %s, severity %s.",
+                sort.subsystem.value,
+                sort.severity.value,
+            )
         sort_summary = f"{sort.subsystem.value}, {sort.severity.value}."
         if sort.used_fallback:
             sort_summary = f"{sort_summary} An invalid value fell back to this."
@@ -63,8 +104,10 @@ class ReportPipeline:
         )
         if limits.verdict is Verdict.GO:
             limit_summary = "Go. Every reading is inside its limit."
+            logger.info("Launch limits are go.")
         else:
             limit_summary = "No-go. " + " ".join(limits.violations)
+            logger.info("Launch limits are no-go: %s", one_line(" ".join(limits.violations)))
         trace.append(_code_step("Check launch limits", limit_summary))
 
         effective, minutes = brief_by_minutes(
@@ -75,6 +118,7 @@ class ReportPipeline:
             brief_summary = f"{minutes} minutes. A missed limit counts as high."
         else:
             brief_summary = f"{minutes} minutes, from {effective.value} severity."
+        logger.info("Brief-by is %d minutes at %s severity.", minutes, effective.value)
         trace.append(_code_step("Set the brief-by time", brief_summary))
 
         hidden_system, hidden_user = check_prompt(report_input, HIDDEN_STEP)
@@ -88,6 +132,9 @@ class ReportPipeline:
         hidden = parse_check(hidden_text.text)
         missing = parse_check(missing_text.text)
         panic = parse_check(panic_text.text)
+        _log_check("hidden instructions", hidden)
+        _log_check("missing details", missing)
+        _log_check("tone", panic)
         trace.append(_model_step("Check for hidden instructions", hidden_text, _check_summary(hidden.flagged, hidden.reason)))
         trace.append(_model_step("Check for missing details", missing_text, _check_summary(missing.flagged, missing.reason)))
         trace.append(_model_step("Check the tone", panic_text, _check_summary(panic.flagged, panic.reason)))
@@ -97,8 +144,10 @@ class ReportPipeline:
                 "Hidden instructions were flagged. A person has to approve this briefing. "
                 "The verdict was not changed."
             )
+            logger.warning("Hidden instructions were flagged. The verdict was left unchanged.")
         else:
             hold_summary = "No hidden instructions. A person still has to approve this briefing."
+            logger.info("The briefing is held for a person.")
         trace.append(_code_step("Hold for the flight director", hold_summary))
 
         feedback = ""
@@ -118,6 +167,7 @@ class ReportPipeline:
             )
             draft_text = await self._model.complete(step=DRAFT_STEP, system=draft_system, user=draft_user)
             briefing = parse_draft(draft_text.text)
+            logger.info("Draft round %d is ready.", number)
             draft_name = "Draft the briefing" if number == 1 else f"Draft the briefing, round {number}"
             trace.append(_model_step(draft_name, draft_text, briefing))
 
@@ -130,6 +180,7 @@ class ReportPipeline:
             )
             review_text = await self._model.complete(step=REVIEW_STEP, system=review_system, user=review_user)
             review = parse_review(review_text.text)
+            _log_review(number, review)
             review_name = "Review the briefing" if number == 1 else f"Review the briefing, round {number}"
             if review.accepted:
                 review_summary = "Accepted."
@@ -147,6 +198,8 @@ class ReportPipeline:
             if review.accepted:
                 break
             feedback = review.feedback
+        if not rounds[-1].accepted:
+            logger.warning("The briefing was not accepted after %d draft rounds.", len(rounds))
 
         assert 1 <= len(rounds) <= _MAX_ROUNDS
         assert limits.verdict is evaluate_limits(
@@ -156,7 +209,7 @@ class ReportPipeline:
         ).verdict
 
         record = ReportRecord(
-            id=str(uuid.uuid4()),
+            id=report_id,
             engineer_name=report_input.engineer_name,
             station=report_input.station,
             wind_knots=report_input.wind_knots,
@@ -183,6 +236,14 @@ class ReportPipeline:
         )
         assert record.status is ReportStatus.PENDING
         assert record.approved_by is None
+        logger.info(
+            "Report is pending: verdict %s, %d draft %s, brief-by %d minutes, cost %s dollars.",
+            record.verdict.value,
+            len(record.rounds),
+            "round" if len(record.rounds) == 1 else "rounds",
+            record.brief_by_minutes,
+            record.cost_usd,
+        )
         return record
 
 
@@ -205,6 +266,26 @@ def _model_step(name: str, result: ModelText, summary: str) -> TraceStep:
 
 def _code_step(name: str, summary: str) -> TraceStep:
     return TraceStep(name=name, kind="code", tokens_in=0, tokens_out=0, summary=summary)
+
+
+def _log_check(name: str, decision: CheckDecision) -> None:
+    if decision.used_fallback:
+        logger.warning("Check %s was unreadable and was flagged.", name)
+        return
+    if decision.flagged:
+        logger.info("Check %s flagged the note.", name)
+        return
+    logger.info("Check %s is clear.", name)
+
+
+def _log_review(number: int, review: ReviewDecision) -> None:
+    if review.used_fallback:
+        logger.warning("Review round %d was unreadable.", number)
+        return
+    if review.accepted:
+        logger.info("Review round %d accepted the briefing.", number)
+        return
+    logger.info("Review round %d requested changes.", number)
 
 
 def _check_summary(flagged: bool, reason: str) -> str:
