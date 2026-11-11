@@ -1,5 +1,4 @@
-"""Azure AI Inference SDK for Microsoft Foundry chat completions.
-"""
+"""OpenAI Responses API client for Microsoft Foundry."""
 
 import asyncio
 import os
@@ -7,13 +6,15 @@ from urllib.parse import urlsplit
 
 import httpx
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
+from openai.types.responses import Response
+from openai.types.responses.response_create_params import ResponseCreateParamsNonStreaming
 
 from mission_control.domain.errors import FoundryConfigError, ModelCallError
 from mission_control.application.model_client import ModelText
 
 
 def normalize_base_url(url: str) -> str:
-    """Return a base URL the OpenAI client can append ``chat/completions`` to."""
+    """Return a base URL the OpenAI client can append ``responses`` to."""
     cleaned = url.strip().rstrip("/")
     if cleaned == "":
         raise FoundryConfigError("Set FOUNDRY_BASE_URL to your Foundry resource URL.")
@@ -25,7 +26,7 @@ def normalize_base_url(url: str) -> str:
         raise FoundryConfigError("FOUNDRY_BASE_URL must be an https URL.")
     if parsed.path not in ("", "/"):
         raise FoundryConfigError(
-            "FOUNDRY_BASE_URL should be the resource host, or the full base ending in /openai/v1/."
+            "FOUNDRY_BASE_URL should be the resource host, or the full base ending in /."
         )
     host = parsed.hostname
     if host.endswith(".openai.azure.com") or host.endswith(".services.ai.azure.com"):
@@ -43,7 +44,7 @@ def _require_https(url: str) -> None:
 
 
 class FoundryModelClient:
-    """One chat-completions client for every pipeline step."""
+    """One Responses API client for every pipeline step."""
 
     def __init__(
         self,
@@ -94,12 +95,8 @@ class FoundryModelClient:
         return await asyncio.to_thread(self._complete_sync, system, user)
 
     def _complete_sync(self, system: str, user: str) -> ModelText:
-        messages: list[dict[str, str]] = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ]
         try:
-            response = self._create(messages)
+            response = self._create(system, user)
         except APITimeoutError as exc:
             raise ModelCallError("Foundry did not answer in time. File the report again.") from exc
         except APIStatusError as exc:
@@ -110,9 +107,9 @@ class FoundryModelClient:
             raise ModelCallError(
                 "Could not reach Foundry. Check the network and file the report again."
             ) from exc
-        if not response.choices:
-            raise ModelCallError("Foundry returned no choices.")
-        content = response.choices[0].message.content
+        if response.status != "completed":
+            raise ModelCallError("Foundry did not complete the response.")
+        content = response.output_text
         if not isinstance(content, str) or not content.strip():
             raise ModelCallError("Foundry returned an empty reply.")
         usage = response.usage
@@ -120,8 +117,8 @@ class FoundryModelClient:
             raise ModelCallError(
                 "Foundry did not return token counts, so the cost cannot be calculated."
             )
-        tokens_in = usage.prompt_tokens
-        tokens_out = usage.completion_tokens
+        tokens_in = usage.input_tokens
+        tokens_out = usage.output_tokens
         if not isinstance(tokens_in, int) or not isinstance(tokens_out, int):
             raise ModelCallError(
                 "Foundry did not return token counts, so the cost cannot be calculated."
@@ -130,31 +127,17 @@ class FoundryModelClient:
             raise ModelCallError("Foundry returned a negative token count.")
         return ModelText(text=content, tokens_in=tokens_in, tokens_out=tokens_out)
 
-    def _create(self, messages: list[dict[str, str]]) -> object:
-        json_format = {"type": "json_object"}
-        if self._json_mode and self._temperature is not None:
-            return self._client.chat.completions.create(
-                model=self._model,
-                messages=messages,  # type: ignore[arg-type]
-                temperature=self._temperature,
-                response_format=json_format,  # type: ignore[arg-type]
-            )
+    def _create(self, system: str, user: str) -> Response:
+        params: ResponseCreateParamsNonStreaming = {
+            "model": self._model,
+            "instructions": system,
+            "input": user,
+        }
         if self._json_mode:
-            return self._client.chat.completions.create(
-                model=self._model,
-                messages=messages,  # type: ignore[arg-type]
-                response_format=json_format,  # type: ignore[arg-type]
-            )
+            params["text"] = {"format": {"type": "json_object"}}
         if self._temperature is not None:
-            return self._client.chat.completions.create(
-                model=self._model,
-                messages=messages,  # type: ignore[arg-type]
-                temperature=self._temperature,
-            )
-        return self._client.chat.completions.create(
-            model=self._model,
-            messages=messages,  # type: ignore[arg-type]
-        )
+            params["temperature"] = self._temperature
+        return self._client.responses.create(**params)
 
 
 def _temperature_from_env() -> float | None:

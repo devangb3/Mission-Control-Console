@@ -34,7 +34,7 @@ Customer concern: a report filed before a restart is still on the board when the
 
 ## Model
 
-Microsoft Foundry, through the OpenAI v1 chat-completions route on the Foundry resource (`https://<resource>.openai.azure.com/openai/v1/`). Every step calls the same `ModelClient`. The deployment name is configuration, not a branch in the pipeline.
+Microsoft Foundry, through the OpenAI v1 Responses API route on the Foundry resource (`https://<resource>.openai.azure.com/openai/v1/`). Every step calls the same `ModelClient`. The deployment name is configuration, not a branch in the pipeline.
 
 Rejected alternative: the Azure AI Inference SDK and the `/models` route. Microsoft retired that SDK on 26 August 2026 and tells new apps to use the v1 route. Calling the SDK from each pipeline step was the other reject: a test could not replace "the model" in one place, and a hidden instruction would have more than one function to confuse.
 
