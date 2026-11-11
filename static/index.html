@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mission Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Newsreader:opsz,wght@6..72,500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/console.css">
+</head>
+<body>
+  <a class="skip" href="#board">Skip to the board</a>
+  <div class="wrap">
+    <header class="mast">
+      <p class="org">Meridian Launch Services</p>
+      <h1>Mission Control</h1>
+      <p class="lede">File what you saw. The board holds the verdict, the briefing, and what each step cost.</p>
+    </header>
+    <main>
+      <section class="desk" aria-labelledby="file-heading">
+        <h2 id="file-heading">File a report</h2>
+        <form id="report-form">
+          <label for="engineer_name">Engineer name</label>
+          <input id="engineer_name" name="engineer_name" autocomplete="name" placeholder="Ada Lovelace">
+
+          <label for="station">Station</label>
+          <input id="station" name="station" placeholder="LC-39A">
+
+          <div class="readings">
+            <div>
+              <label for="wind_knots">Wind knots</label>
+              <input id="wind_knots" name="wind_knots" inputmode="decimal" placeholder="12">
+            </div>
+            <div>
+              <label for="temp_c">Temp C</label>
+              <input id="temp_c" name="temp_c" inputmode="decimal" placeholder="18">
+            </div>
+            <div>
+              <label for="fuel_pct">Fuel %</label>
+              <input id="fuel_pct" name="fuel_pct" inputmode="decimal" placeholder="99">
+            </div>
+          </div>
+
+          <label for="note">Note</label>
+          <textarea id="note" name="note" rows="5" placeholder="The telemetry link dropped for four seconds, then returned."></textarea>
+          <p class="hint">Write what you saw. Instructions in the note cannot change the verdict.</p>
+          <p id="form-error" class="form-error" role="alert"></p>
+          <button type="submit" id="file-button">File report</button>
+        </form>
+
+        <h2 id="queue-heading">On the board</h2>
+        <ul id="queue" aria-labelledby="queue-heading"></ul>
+      </section>
+
+      <section class="board" id="board" aria-live="polite"></section>
+    </main>
+  </div>
+  <script src="/static/console.js"></script>
+  <noscript>This console needs JavaScript to file a report and to approve a briefing.</noscript>
+</body>
+</html>
