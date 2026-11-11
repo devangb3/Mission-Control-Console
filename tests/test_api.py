@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from mission_control.factory import create_app
@@ -35,6 +36,44 @@ def test_bad_input_is_rejected_with_a_clear_message(tmp_path: Path) -> None:
             assert response.status_code == 422
             assert response.json()["detail"] == message
         assert client.get("/api/reports").json() == []
+
+
+@pytest.mark.parametrize(("field", "label"), [
+    ("wind_knots", "Wind"), ("temp_c", "Temperature"), ("fuel_pct", "Fuel"),
+])
+@pytest.mark.parametrize("sign", [-1, 1])
+def test_overflowing_readings_are_rejected_before_model_calls(
+    tmp_path: Path, field: str, label: str, sign: int,
+) -> None:
+    model = scripted()
+    with _client(tmp_path, model=model) as client:
+        response = client.post("/api/reports", json=reading(**{field: sign * 10**400}))
+        assert response.status_code == 422
+        assert response.json() == {"detail": f"{label} must be a finite number."}
+        assert client.get("/api/reports").json() == []
+    assert model.calls == []
+
+
+@pytest.mark.parametrize("body", [b"\xff", b"{", b'{"number":' + b"9" * 5000 + b"}"])
+def test_invalid_json_body_does_not_create_or_approve_reports(tmp_path: Path, body: bytes) -> None:
+    model = scripted()
+    with _client(tmp_path, model=model) as client:
+        response = client.post("/api/reports", content=body, headers={"Content-Type": "application/json"})
+        assert response.status_code == 422
+        assert response.json() == {"detail": "Send the report as JSON."}
+        assert model.calls == []
+        assert client.get("/api/reports").json() == []
+
+        report = client.post("/api/reports", json=reading()).json()
+        response = client.post(
+            f"/api/reports/{report['id']}/approve", content=body,
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 422
+        assert response.json() == {"detail": "Send the approver name as JSON."}
+        saved = client.get(f"/api/reports/{report['id']}").json()
+        assert saved["status"] == "pending"
+        assert saved["approved_by"] is None
 
 
 def test_boundaries_hold_through_the_api(tmp_path: Path) -> None:
