@@ -26,7 +26,7 @@ Customer concern: the verdict has to be readable at a glance, and the original n
 
 SQLite, one file under `data/`.
 
-A report is written in a single insert after the pipeline finishes. Opening that file in a new process is the restart. There is no second service to connect to.
+Each field is its own column. Violations, draft rounds, and trace steps are their own tables, written in one transaction after the pipeline finishes. Opening that file in a new process is the restart. There is no second service to connect to.
 
 Rejected alternative: Postgres. It is the right database for a shared control room later, and the wrong one for a single console that has to come back after a process restart without a database host.
 

@@ -62,7 +62,10 @@ def _require_text(value: object, name: str, limit: int) -> str:
 def _require_reading(value: object, label: str, *, minimum: int | None) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise InvalidReport(f"{label} must be a number.")
-    number = float(value)
+    try:
+        number = float(value)
+    except OverflowError as exc:
+        raise InvalidReport(f"{label} must be a finite number.") from exc
     if not math.isfinite(number):
         raise InvalidReport(f"{label} must be a finite number.")
     if minimum is not None and number < minimum:

@@ -6,6 +6,18 @@ The model is a deployment in Microsoft Foundry, called through one client. Tests
 
 ## Commands
 
+Requires Python 3.11 or newer and `make`. The commands create `.venv` and
+install dependencies on first use. If `python3` is an older system Python,
+select a supported interpreter with `make test PYTHON=/path/to/python3.13`
+(the same option works with `make start`). To replace an existing environment
+that uses an older Python without deleting it, also choose a new path with
+`VENV=.venv/new-python`.
+
+Dependency installation is marked complete only after it succeeds. If it fails,
+resolve the error and rerun the same command; installation will retry. Changes
+to `pyproject.toml` also trigger installation again. Once setup is complete,
+tests require neither network access nor an API key.
+
 Start the app:
 
 ```

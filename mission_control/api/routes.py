@@ -1,6 +1,5 @@
 """HTTP transport: decode requests and delegate report operations."""
 
-import json
 from pathlib import Path
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, Response
@@ -32,7 +31,8 @@ def create_router(service: ReportService, static_dir: Path) -> APIRouter:
     async def create_report(request: Request) -> ReportRecord:
         try:
             payload: object = await request.json()
-        except json.JSONDecodeError as exc:
+        except ValueError as exc:
+            # JSON syntax, invalid encoding, and oversized integer literals.
             raise InvalidReport("Send the report as JSON.") from exc
         return await service.create(payload)
 
@@ -40,7 +40,7 @@ def create_router(service: ReportService, static_dir: Path) -> APIRouter:
     async def approve_report(report_id: str, request: Request) -> ReportRecord:
         try:
             payload: object = await request.json()
-        except json.JSONDecodeError as exc:
+        except ValueError as exc:
             raise InvalidReport("Send the approver name as JSON.") from exc
         return service.approve(report_id, payload)
 
